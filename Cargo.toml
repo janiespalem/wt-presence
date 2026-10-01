@@ -32,6 +32,7 @@ tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 uuid = { version = "1.18", features = ["serde", "v4"] }
 webbrowser = "1.0"
+url = "2.5"
 
 [dev-dependencies]
 http-body-util = "0.1"
@@ -41,4 +42,3 @@ tower = { version = "0.5", features = ["util"] }
 [target.'cfg(windows)'.dependencies]
 tray-icon = "0.26"
 windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Threading"] }
-

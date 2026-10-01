@@ -2995,6 +2995,7 @@ dependencies = [
  "tracing-appender",
  "tracing-subscriber",
  "tray-icon",
+ "url",
  "uuid 1.26.1",
  "webbrowser",
  "windows",
