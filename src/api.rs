@@ -109,11 +109,7 @@ impl ApiState {
         self.inner.snapshot.read().await.clone()
     }
 
-    pub fn persist_session(
-        &self,
-        id: &str,
-        session: &SessionSummary,
-    ) -> Result<(), StorageError> {
+    pub fn persist_session(&self, id: &str, session: &SessionSummary) -> Result<(), StorageError> {
         self.inner.sessions.save(id, session)
     }
 
@@ -130,10 +126,7 @@ pub fn router(state: ApiState) -> Router {
         .route("/api/v1/preview", post(post_preview))
         .route("/api/v1/presence/state", get(get_presence))
         .route("/api/v1/sessions", get(get_sessions))
-        .route_layer(middleware::from_fn_with_state(
-            state.clone(),
-            authorize,
-        ))
+        .route_layer(middleware::from_fn_with_state(state.clone(), authorize))
         .with_state(state)
 }
 
@@ -270,5 +263,9 @@ impl IntoResponse for ApiError {
 }
 
 fn api_error(status: StatusCode, kind: &'static str, message: &str) -> Response {
-    (status, Json(json!({ "error": { "kind": kind, "message": message } }))).into_response()
+    (
+        status,
+        Json(json!({ "error": { "kind": kind, "message": message } })),
+    )
+        .into_response()
 }

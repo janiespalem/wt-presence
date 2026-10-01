@@ -60,12 +60,7 @@ where
     T: TelemetrySource,
     S: PresenceSink,
 {
-    pub fn new(
-        telemetry: T,
-        presence: S,
-        api: ApiState,
-        started_at: DateTime<Utc>,
-    ) -> Self {
+    pub fn new(telemetry: T, presence: S, api: ApiState, started_at: DateTime<Utc>) -> Self {
         Self {
             telemetry,
             presence,

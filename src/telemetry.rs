@@ -102,8 +102,8 @@ pub fn normalize_payloads(payloads: PayloadSet) -> NormalizedTelemetry {
 
     let vehicle_name = string_field(&payloads.indicators, "type");
     let map_generation = unsigned_field(&payloads.map_info, "map_generation");
-    let map_valid = boolean_field(&payloads.map_info, "valid")
-        .unwrap_or_else(|| map_generation.is_some());
+    let map_valid =
+        boolean_field(&payloads.map_info, "valid").unwrap_or_else(|| map_generation.is_some());
 
     let telemetry = Telemetry {
         speed_ias_kph: number_field(&payloads.state, "IAS, km/h"),

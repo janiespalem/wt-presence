@@ -89,4 +89,3 @@ fn humanize_vehicle_name(value: &str) -> String {
     let value = value.rsplit('/').next().unwrap_or(value);
     value.replace('_', " ")
 }
-

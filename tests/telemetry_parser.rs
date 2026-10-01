@@ -94,4 +94,3 @@ fn malformed_optional_values_are_ignored() {
     assert!(normalized.telemetry.speed_ias_kph.is_none());
     assert!(normalized.telemetry.altitude_agl_m.is_none());
 }
-

@@ -6,8 +6,8 @@ use wt_presence::{
 };
 
 fn summary(offset_minutes: i64, kills: u32) -> SessionSummary {
-    let started_at = Utc.timestamp_opt(1_700_000_000, 0).unwrap()
-        + Duration::minutes(offset_minutes);
+    let started_at =
+        Utc.timestamp_opt(1_700_000_000, 0).unwrap() + Duration::minutes(offset_minutes);
     let mut value = SessionEngine::new(started_at).summary();
     value.kills = kills;
     value

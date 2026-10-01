@@ -70,11 +70,7 @@ impl SessionEngine {
         }
     }
 
-    pub fn apply(
-        &mut self,
-        snapshot: &GameSnapshot,
-        events: &[CombatEvent],
-    ) -> SessionSummary {
+    pub fn apply(&mut self, snapshot: &GameSnapshot, events: &[CombatEvent]) -> SessionSummary {
         self.summary.updated_at = snapshot.captured_at;
 
         if snapshot.phase == GamePhase::Battle {
@@ -155,4 +151,3 @@ impl SessionEngine {
         }
     }
 }
-

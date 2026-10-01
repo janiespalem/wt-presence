@@ -23,27 +23,9 @@ fn observation(
 fn classifies_game_phases_from_local_telemetry() {
     let mut machine = GameStateMachine::default();
 
-    let offline = machine.observe(observation(
-        false,
-        false,
-        None,
-        VehicleKind::Unknown,
-        None,
-    ));
-    let hangar = machine.observe(observation(
-        true,
-        false,
-        None,
-        VehicleKind::Unknown,
-        None,
-    ));
-    let loading = machine.observe(observation(
-        true,
-        true,
-        None,
-        VehicleKind::Unknown,
-        Some(5),
-    ));
+    let offline = machine.observe(observation(false, false, None, VehicleKind::Unknown, None));
+    let hangar = machine.observe(observation(true, false, None, VehicleKind::Unknown, None));
+    let loading = machine.observe(observation(true, true, None, VehicleKind::Unknown, Some(5)));
     let battle = machine.observe(observation(
         true,
         true,
@@ -104,4 +86,3 @@ fn treats_dummy_vehicle_as_loading() {
     assert_eq!(transition.current.phase, GamePhase::Loading);
     assert!(transition.current.battle_id.is_none());
 }
-

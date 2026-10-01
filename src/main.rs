@@ -19,9 +19,7 @@ use uuid::Uuid;
 use wt_presence::{
     api::{ApiState, router as api_router},
     config::SettingsStore,
-    runtime::{
-        DisabledPresenceSink, DiscordPresenceSink, PresenceSink, RuntimeEngine,
-    },
+    runtime::{DisabledPresenceSink, DiscordPresenceSink, PresenceSink, RuntimeEngine},
     storage::SessionRepository,
     telemetry::WtTelemetryClient,
 };
@@ -147,7 +145,9 @@ fn discover_web_root() -> Result<PathBuf> {
         .into_iter()
         .flatten()
         .find(|path| path.join("index.html").is_file())
-        .ok_or_else(|| anyhow::anyhow!("dashboard assets not found; build web/ or set WT_PRESENCE_WEB_DIR"))
+        .ok_or_else(|| {
+            anyhow::anyhow!("dashboard assets not found; build web/ or set WT_PRESENCE_WEB_DIR")
+        })
 }
 
 struct AppPaths {

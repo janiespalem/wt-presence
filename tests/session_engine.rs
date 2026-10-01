@@ -98,4 +98,3 @@ fn records_each_vehicle_used_during_one_battle_once() {
     assert_eq!(battle.vehicles[0].display_name, "J-7D");
     assert_eq!(battle.vehicles[1].display_name, "Al-Khalid-I");
 }
-

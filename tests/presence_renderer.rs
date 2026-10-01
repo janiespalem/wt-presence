@@ -101,4 +101,3 @@ fn minimal_preset_has_a_useful_offline_fallback() {
     assert_eq!(activity.details.as_deref(), Some("War Thunder"));
     assert_eq!(activity.state.as_deref(), Some("Offline"));
 }
-

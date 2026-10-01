@@ -50,4 +50,3 @@ async fn reports_unreachable_game_without_panicking() {
 
     assert_eq!(error.kind(), "unreachable");
 }
-

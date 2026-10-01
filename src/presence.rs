@@ -26,9 +26,8 @@ impl PresencePreset {
         Self {
             id: "minimal".to_owned(),
             name: "Minimal".to_owned(),
-            details_template:
-                "{% if vehicle %}{{ vehicle.name }}{% else %}War Thunder{% endif %}"
-                    .to_owned(),
+            details_template: "{% if vehicle %}{{ vehicle.name }}{% else %}War Thunder{% endif %}"
+                .to_owned(),
             state_template: "{{ game.phase_label }}".to_owned(),
             large_image: Some("war_thunder".to_owned()),
             small_image: None,
@@ -91,25 +90,17 @@ impl PresenceRenderer {
         environment.add_filter("round", |value: f64| value.round() as i64);
         let context = template_context(snapshot, session);
 
-        let details = render_field(
-            &environment,
-            "details",
-            &preset.details_template,
-            &context,
-        )?;
-        let state = render_field(
-            &environment,
-            "state",
-            &preset.state_template,
-            &context,
-        )?;
+        let details = render_field(&environment, "details", &preset.details_template, &context)?;
+        let state = render_field(&environment, "state", &preset.state_template, &context)?;
 
         Ok(DiscordActivity {
             details,
             state,
             large_image: preset.large_image.clone(),
             small_image: preset.small_image.clone(),
-            started_at: preset.show_elapsed.then(|| snapshot.captured_at.timestamp()),
+            started_at: preset
+                .show_elapsed
+                .then(|| snapshot.captured_at.timestamp()),
         })
     }
 }
