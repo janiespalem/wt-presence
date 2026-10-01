@@ -1,0 +1,35 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build dashboard
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+      - name: Build agent
+        run: cargo build --release
+      - name: Build installer
+        shell: pwsh
+        run: makensis.exe "/DVERSION=$env:GITHUB_REF_NAME" .github/installer.nsi
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/WT-Presence-Setup.exe
+          generate_release_notes: true

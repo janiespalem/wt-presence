@@ -1,3 +1,5 @@
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 use std::{env, net::SocketAddr, path::PathBuf, time::Duration};
 
 use anyhow::{Context, Result, bail};
@@ -23,6 +25,9 @@ use wt_presence::{
     storage::SessionRepository,
     telemetry::WtTelemetryClient,
 };
+
+#[cfg(windows)]
+mod windows_tray;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -63,6 +68,9 @@ async fn main() -> Result<()> {
     let runtime = spawn_runtime(api, &settings).await?;
 
     let dashboard_url = format!("{origin}/#token={token}");
+    let (_exit_sender, exit_receiver) = tokio::sync::mpsc::unbounded_channel();
+    #[cfg(windows)]
+    let _tray = windows_tray::WindowsTray::start(dashboard_url.clone(), _exit_sender.clone())?;
     info!(url = %origin, web_root = %web_root.display(), "WT Presence is ready");
     if settings.open_dashboard_on_start {
         if let Err(error) = webbrowser::open(&dashboard_url) {
@@ -70,7 +78,7 @@ async fn main() -> Result<()> {
         }
     }
 
-    let server = axum::serve(listener, app).with_graceful_shutdown(shutdown_signal());
+    let server = axum::serve(listener, app).with_graceful_shutdown(shutdown_signal(exit_receiver));
     if let Err(error) = server.await {
         error!(%error, "local dashboard server stopped unexpectedly");
     }
@@ -116,9 +124,14 @@ async fn spawn_runtime(
     }))
 }
 
-async fn shutdown_signal() {
-    if let Err(error) = tokio::signal::ctrl_c().await {
-        error!(%error, "failed to install shutdown signal handler");
+async fn shutdown_signal(mut exit_receiver: tokio::sync::mpsc::UnboundedReceiver<()>) {
+    tokio::select! {
+        result = tokio::signal::ctrl_c() => {
+            if let Err(error) = result {
+                error!(%error, "failed to install shutdown signal handler");
+            }
+        }
+        _ = exit_receiver.recv() => {}
     }
 }
 
