@@ -100,6 +100,26 @@ impl ApiState {
     pub async fn settings(&self) -> AppSettings {
         self.inner.settings.read().await.clone()
     }
+
+    pub async fn status(&self) -> RuntimeStatus {
+        self.inner.status.read().await.clone()
+    }
+
+    pub async fn snapshot(&self) -> GameSnapshot {
+        self.inner.snapshot.read().await.clone()
+    }
+
+    pub fn persist_session(
+        &self,
+        id: &str,
+        session: &SessionSummary,
+    ) -> Result<(), StorageError> {
+        self.inner.sessions.save(id, session)
+    }
+
+    pub fn recent_sessions(&self, limit: usize) -> Result<Vec<StoredSession>, StorageError> {
+        self.inner.sessions.recent(limit)
+    }
 }
 
 pub fn router(state: ApiState) -> Router {
