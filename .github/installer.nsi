@@ -1,4 +1,5 @@
 !include "MUI2.nsh"
+!cd ".."
 
 !ifndef VERSION
   !define VERSION "dev"
