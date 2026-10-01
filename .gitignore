@@ -1,6 +1,8 @@
 /target/
 /web/node_modules/
 /web/dist/
+/web/*.tsbuildinfo
+/web/src/*.js
 /.idea/
 /.vscode/
 *.log
@@ -8,4 +10,3 @@
 *.db-shm
 *.db-wal
 .DS_Store
-
