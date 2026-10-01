@@ -4,7 +4,11 @@ Privacy-first Discord Rich Presence for War Thunder.
 
 WT Presence reads the game's local telemetry interface, turns live game state into a configurable Discord activity, and stores optional session summaries locally. It does not require a Gaijin login or a cloud account.
 
-The project is under active development. Windows 10/11 x64 is the first supported target; packaged releases are not available yet.
+The project is under active development. Windows 10/11 x64 is the first supported target.
+
+## Install on Windows
+
+Download `WT-Presence-Setup.exe` from the [latest beta release](https://github.com/janiespalem/wt-presence/releases). The installer is user-local and does not require administrator access. Early builds are unsigned, so Windows SmartScreen may show an unknown-publisher warning.
 
 ## Run from source
 
