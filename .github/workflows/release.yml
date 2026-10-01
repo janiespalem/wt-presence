@@ -26,11 +26,14 @@ jobs:
           npm run build
       - name: Build agent
         run: cargo build --release
+      - name: Install NSIS
+        shell: pwsh
+        run: choco install nsis --no-progress --yes
       - name: Build installer
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          makensis.exe "/DVERSION=$env:GITHUB_REF_NAME" .github/installer.nsi
+          & "${env:ProgramFiles(x86)}\NSIS\makensis.exe" "/DVERSION=$env:GITHUB_REF_NAME" .github/installer.nsi
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/WT-Presence-Setup.exe
