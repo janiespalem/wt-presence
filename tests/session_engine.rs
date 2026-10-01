@@ -55,7 +55,10 @@ fn deduplicates_combat_events_by_id() {
         occurred_at: at(115),
     };
 
-    engine.apply(&battle_snapshot(id, 110, "J-7D"), &[event.clone()]);
+    engine.apply(
+        &battle_snapshot(id, 110, "J-7D"),
+        std::slice::from_ref(&event),
+    );
     let summary = engine.apply(&battle_snapshot(id, 120, "J-7D"), &[event]);
 
     assert_eq!(summary.kills, 1);

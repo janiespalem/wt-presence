@@ -70,10 +70,10 @@ async fn main() -> Result<()> {
     #[cfg(windows)]
     let _tray = windows_tray::WindowsTray::start(dashboard_url.clone(), _exit_sender.clone())?;
     info!(url = %origin, web_root = %web_root.display(), "WT Presence is ready");
-    if settings.open_dashboard_on_start {
-        if let Err(error) = webbrowser::open(&dashboard_url) {
-            warn!(%error, "could not open the dashboard automatically");
-        }
+    if settings.open_dashboard_on_start
+        && let Err(error) = webbrowser::open(&dashboard_url)
+    {
+        warn!(%error, "could not open the dashboard automatically");
     }
 
     let server = axum::serve(listener, app).with_graceful_shutdown(shutdown_signal(exit_receiver));

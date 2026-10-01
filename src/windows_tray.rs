@@ -86,7 +86,7 @@ fn create_tray(
 
     let open_id = open.id().clone();
     let quit_id = quit.id().clone();
-    MenuEvent::set_event_handler(Some(move |event| {
+    MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
         if event.id == open_id {
             let _ = webbrowser::open(&dashboard_url);
         } else if event.id == quit_id {
@@ -112,8 +112,8 @@ fn create_tray(
 fn tray_icon() -> Result<Icon> {
     const SIZE: u32 = 32;
     let mut rgba = vec![0_u8; (SIZE * SIZE * 4) as usize];
-    for y in 5..27 {
-        for x in 5..27 {
+    for y in 5_u32..27 {
+        for x in 5_u32..27 {
             let wing = (y > 13 && y < 19 && x > 4 && x < 28)
                 || (x > 13 && x < 19 && y > 4 && y < 28)
                 || (x.abs_diff(y) < 2 && x > 9 && x < 23);

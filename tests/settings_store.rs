@@ -26,8 +26,10 @@ fn saves_settings_atomically_and_round_trips_presets() {
     let directory = tempdir().unwrap();
     let path = directory.path().join("settings.json");
     let store = SettingsStore::new(&path);
-    let mut settings = AppSettings::default();
-    settings.active_preset_id = "custom".to_owned();
+    let mut settings = AppSettings {
+        active_preset_id: "custom".to_owned(),
+        ..AppSettings::default()
+    };
     settings.presets.push(PresencePreset {
         id: "custom".to_owned(),
         name: "Custom".to_owned(),
