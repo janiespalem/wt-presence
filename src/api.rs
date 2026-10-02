@@ -198,13 +198,8 @@ async fn post_preview(
 ) -> Result<Json<DiscordActivity>, ApiError> {
     let snapshot = state.inner.snapshot.read().await.clone();
     let session = state.inner.session.read().await.clone();
-    let activity = render_preview(
-        &snapshot,
-        &session,
-        &request.preset,
-        request.scenario,
-    )
-    .map_err(ApiError::presence)?;
+    let activity = render_preview(&snapshot, &session, &request.preset, request.scenario)
+        .map_err(ApiError::presence)?;
     Ok(Json(activity))
 }
 

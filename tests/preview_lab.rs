@@ -55,13 +55,7 @@ fn ground_scenario_exposes_ground_specific_signals() {
         ..diagnostic_preset()
     };
 
-    let activity = render_preview(
-        &snapshot,
-        &session,
-        &preset,
-        PreviewScenario::Ground,
-    )
-    .unwrap();
+    let activity = render_preview(&snapshot, &session, &preset, PreviewScenario::Ground).unwrap();
 
     assert_eq!(
         activity.details.as_deref(),
