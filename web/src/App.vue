@@ -20,6 +20,7 @@ import type {
   AppSettings,
   DiscordActivity,
   GameSnapshot,
+  PreviewScenario,
   RuntimeStatus,
   StoredSession,
 } from "./types";
@@ -32,12 +33,20 @@ const snapshot = ref<GameSnapshot | null>(null);
 const settings = ref<AppSettings | null>(null);
 const livePresence = ref<DiscordActivity | null>(null);
 const preview = ref<DiscordActivity | null>(null);
+const previewScenario = ref<PreviewScenario>("air");
 const sessions = ref<StoredSession[]>([]);
 const fatalError = ref("");
 const previewError = ref("");
 const saveState = ref<"idle" | "saving" | "saved">("idle");
 let pollingTimer: number | undefined;
 let previewTimer: number | undefined;
+
+const previewScenarios: { value: PreviewScenario; label: string }[] = [
+  { value: "live", label: "Live" },
+  { value: "air", label: "Air" },
+  { value: "ground", label: "Ground" },
+  { value: "hangar", label: "Hangar" },
+];
 
 const activePreset = computed(() =>
   settings.value?.presets.find(
@@ -115,7 +124,7 @@ async function load(): Promise<void> {
 async function refreshPreview(): Promise<void> {
   if (!activePreset.value) return;
   try {
-    preview.value = await api.preview(activePreset.value);
+    preview.value = await api.preview(activePreset.value, previewScenario.value);
     previewError.value = "";
   } catch (error) {
     previewError.value = error instanceof Error ? error.message : String(error);
@@ -136,7 +145,10 @@ async function save(): Promise<void> {
 }
 
 watch(
-  () => (activePreset.value ? JSON.stringify(activePreset.value) : ""),
+  () => [
+    activePreset.value ? JSON.stringify(activePreset.value) : "",
+    previewScenario.value,
+  ],
   () => {
     window.clearTimeout(previewTimer);
     previewTimer = window.setTimeout(refreshPreview, 220);
@@ -302,7 +314,24 @@ onBeforeUnmount(() => {
         </div>
 
         <aside class="preview-column">
-          <span class="eyebrow">LIVE PREVIEW</span>
+          <div class="preview-heading">
+            <div>
+              <span class="eyebrow">PREVIEW LAB</span>
+              <small>TEST SIGNAL</small>
+            </div>
+            <div class="scenario-rail" role="group" aria-label="Preview scenario">
+              <button
+                v-for="scenario in previewScenarios"
+                :key="scenario.value"
+                type="button"
+                :class="{ active: previewScenario === scenario.value }"
+                :aria-pressed="previewScenario === scenario.value"
+                @click="previewScenario = scenario.value"
+              >
+                {{ scenario.label }}
+              </button>
+            </div>
+          </div>
           <div class="discord-preview large">
             <div class="presence-art"><Plane :size="58" /></div>
             <div>

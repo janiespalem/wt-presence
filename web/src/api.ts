@@ -3,6 +3,7 @@ import type {
   DiscordActivity,
   GameSnapshot,
   PresencePreset,
+  PreviewScenario,
   RuntimeStatus,
   StoredSession,
 } from "./types";
@@ -44,10 +45,10 @@ export const api = {
   settings: () => request<AppSettings>("/api/v1/settings"),
   presence: () => request<DiscordActivity | null>("/api/v1/presence/state"),
   sessions: () => request<StoredSession[]>("/api/v1/sessions?limit=20"),
-  preview: (preset: PresencePreset) =>
+  preview: (preset: PresencePreset, scenario: PreviewScenario) =>
     request<DiscordActivity>("/api/v1/preview", {
       method: "POST",
-      body: JSON.stringify(preset),
+      body: JSON.stringify({ preset, scenario }),
     }),
   saveSettings: (settings: AppSettings) =>
     request<AppSettings>("/api/v1/settings", {

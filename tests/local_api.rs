@@ -10,6 +10,7 @@ use wt_presence::{
     config::{AppSettings, SettingsStore},
     domain::GameSnapshot,
     presence::PresencePreset,
+    preview::{PreviewRequest, PreviewScenario},
     session::SessionEngine,
     storage::SessionRepository,
 };
@@ -99,7 +100,10 @@ async fn previews_a_preset_against_the_current_snapshot() {
     let snapshot = GameSnapshot::default();
     let session = SessionEngine::new(snapshot.captured_at).summary();
     state.set_game_state(snapshot, session).await;
-    let preset = PresencePreset::minimal();
+    let request = PreviewRequest {
+        preset: PresencePreset::minimal(),
+        scenario: PreviewScenario::Air,
+    };
 
     let response = router(state)
         .oneshot(
@@ -108,7 +112,7 @@ async fn previews_a_preset_against_the_current_snapshot() {
                 .uri("/api/v1/preview")
                 .header("content-type", "application/json")
                 .header("x-wt-presence-token", "secret-token")
-                .body(Body::from(serde_json::to_vec(&preset).unwrap()))
+                .body(Body::from(serde_json::to_vec(&request).unwrap()))
                 .unwrap(),
         )
         .await
@@ -117,8 +121,8 @@ async fn previews_a_preset_against_the_current_snapshot() {
     assert_eq!(response.status(), StatusCode::OK);
     let body = response.into_body().collect().await.unwrap().to_bytes();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(json["details"], "War Thunder");
-    assert_eq!(json["state"], "Offline");
+    assert_eq!(json["details"], "J-7D");
+    assert_eq!(json["state"], "In battle");
 }
 
 #[tokio::test]

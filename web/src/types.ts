@@ -1,4 +1,5 @@
 export type GamePhase = "offline" | "hangar" | "loading" | "battle";
+export type PreviewScenario = "live" | "hangar" | "air" | "ground";
 
 export interface Telemetry {
   speed_ias_kph: number | null;
