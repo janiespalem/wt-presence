@@ -125,6 +125,39 @@ fn suppresses_identical_activities_until_heartbeat_but_publishes_changes() {
 }
 
 #[test]
+fn clock_rollback_refreshes_identical_activity_and_restarts_heartbeat() {
+    let sink = FakeSink::default();
+    let events = sink.events.clone();
+    let mut publisher = PresencePublisher::new(sink, Duration::from_secs(15));
+    let activity = activity();
+
+    assert_eq!(
+        publisher.publish(&activity, at(30)),
+        Ok(PublishOutcome::Published)
+    );
+    assert_eq!(
+        publisher.publish(&activity, at(0)),
+        Ok(PublishOutcome::Published)
+    );
+    assert_eq!(
+        publisher.publish(&activity, at(14)),
+        Ok(PublishOutcome::Skipped)
+    );
+    assert_eq!(
+        publisher.publish(&activity, at(15)),
+        Ok(PublishOutcome::Published)
+    );
+    assert_eq!(
+        events.lock().unwrap().as_slice(),
+        [
+            SinkEvent::Publish(activity.clone()),
+            SinkEvent::Publish(activity.clone()),
+            SinkEvent::Publish(activity),
+        ]
+    );
+}
+
+#[test]
 fn every_activity_field_change_publishes_immediately() {
     let initial = activity();
     let changes = [

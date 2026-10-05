@@ -63,6 +63,15 @@ const activePreset = computed(() =>
   ),
 );
 
+const preservedArtwork = computed(() => {
+  const value = activePreset.value?.large_image;
+  if (value == null || artworkChoices.some((choice) => choice.value === value)) return null;
+  return {
+    value,
+    label: value === "war_thunder" ? "Legacy · war_thunder" : `Custom · ${value}`,
+  };
+});
+
 const gameLabel = computed(() => {
   const phase = snapshot.value?.phase;
   return {
@@ -253,9 +262,9 @@ onBeforeUnmount(() => {
               <b>{{ status?.discord_connected ? "TRANSMITTING" : "STANDBY" }}</b>
             </div>
             <div class="discord-preview compact">
-              <div class="presence-art"><Plane :size="40" /></div>
+              <div class="presence-art" aria-hidden="true"><span>TEXT ONLY</span></div>
               <div>
-                <span>PLAYING WAR THUNDER</span>
+                <span>WT Presence · TEXT-ONLY PREVIEW</span>
                 <strong>{{ livePresence?.details ?? "No activity published" }}</strong>
                 <p>{{ livePresence?.state ?? "Discord is waiting for a link." }}</p>
               </div>
@@ -302,6 +311,9 @@ onBeforeUnmount(() => {
               <option v-for="artwork in artworkChoices" :key="artwork.label" :value="artwork.value">
                 {{ artwork.label }}
               </option>
+              <option v-if="preservedArtwork" :value="preservedArtwork.value">
+                {{ preservedArtwork.label }}
+              </option>
             </select>
             <small>Automatic follows the game phase and vehicle type.</small>
           </label>
@@ -336,9 +348,9 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <div class="discord-preview large">
-            <div class="presence-art"><Plane :size="58" /></div>
+            <div class="presence-art" aria-hidden="true"><span>TEXT ONLY</span></div>
             <div>
-              <span>PLAYING WAR THUNDER</span>
+              <span>WT Presence · TEXT-ONLY PREVIEW</span>
               <strong>{{ preview?.details ?? "—" }}</strong>
               <p>{{ preview?.state ?? "—" }}</p>
               <small v-if="preview?.started_at">elapsed time enabled</small>

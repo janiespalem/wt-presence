@@ -78,7 +78,7 @@ The dashboard removes the Discord Application ID control. It instead reports one
 
 ## Presence behavior
 
-Changing phase, vehicle, map, details, or state updates the existing rich presence while retaining the session start timestamp. The activity is cleared only when War Thunder becomes unavailable or the application exits.
+Changing phase, vehicle, map, details, or state updates the existing rich presence while retaining the session start timestamp. The activity is cleared when War Thunder becomes unavailable, a render/template error prevents valid activity output, or the application exits.
 
 Repeated identical activities are suppressed between 15-second heartbeats. Any visible change publishes immediately. A heartbeat rechecks the IPC connection so Discord can recover after being closed and reopened without waiting for another game-state change.
 

@@ -79,7 +79,7 @@ impl<S: PresenceSink> PresencePublisher<S> {
                 && now
                     .signed_duration_since(*at)
                     .to_std()
-                    .unwrap_or_default()
+                    .unwrap_or(self.refresh_interval)
                     < self.refresh_interval
         }) {
             return Ok(PublishOutcome::Skipped);
