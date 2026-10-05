@@ -160,7 +160,10 @@ fn automatic_artwork_tracks_phase_and_vehicle_domain() {
             .unwrap()
     };
 
-    assert_eq!(render(&hangar).large_image.as_deref(), Some("presence-hangar"));
+    assert_eq!(
+        render(&hangar).large_image.as_deref(),
+        Some("presence-hangar")
+    );
     assert_eq!(
         render(&air_battle).large_image.as_deref(),
         Some("presence-air")

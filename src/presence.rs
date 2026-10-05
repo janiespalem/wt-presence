@@ -98,14 +98,16 @@ impl PresenceRenderer {
             details,
             state,
             large_image: Some(match preset.large_image.as_deref() {
-                None => DiscordIdentity::asset_key(DiscordIdentity::artwork_for(snapshot)).to_owned(),
-                Some("war_thunder") => DiscordIdentity::asset_key(PresenceArtwork::Default).to_owned(),
+                None => {
+                    DiscordIdentity::asset_key(DiscordIdentity::artwork_for(snapshot)).to_owned()
+                }
+                Some("war_thunder") => {
+                    DiscordIdentity::asset_key(PresenceArtwork::Default).to_owned()
+                }
                 Some(key) => key.to_owned(),
             }),
             small_image: preset.small_image.clone(),
-            started_at: preset
-                .show_elapsed
-                .then(|| session.started_at.timestamp()),
+            started_at: preset.show_elapsed.then(|| session.started_at.timestamp()),
         })
     }
 }
