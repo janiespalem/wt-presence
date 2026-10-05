@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use discord_rich_presence::{
@@ -8,6 +10,7 @@ use uuid::Uuid;
 
 use crate::{
     api::{ApiState, RuntimeStatus},
+    discord_identity::DiscordIdentity,
     domain::{GamePhase, Telemetry},
     presence::{DiscordActivity, PresenceRenderer},
     session::SessionEngine,
@@ -45,9 +48,56 @@ impl<T: PresenceSink + ?Sized> PresenceSink for Box<T> {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PublishOutcome {
+    Published,
+    Skipped,
+}
+
+pub struct PresencePublisher<S> {
+    inner: S,
+    refresh_interval: Duration,
+    last_published: Option<(DiscordActivity, DateTime<Utc>)>,
+}
+
+impl<S: PresenceSink> PresencePublisher<S> {
+    pub fn new(inner: S, refresh_interval: Duration) -> Self {
+        Self {
+            inner,
+            refresh_interval,
+            last_published: None,
+        }
+    }
+
+    pub fn publish(
+        &mut self,
+        activity: &DiscordActivity,
+        now: DateTime<Utc>,
+    ) -> Result<PublishOutcome, String> {
+        if self.last_published.as_ref().is_some_and(|(previous, at)| {
+            previous == activity
+                && now
+                    .signed_duration_since(*at)
+                    .to_std()
+                    .unwrap_or_default()
+                    < self.refresh_interval
+        }) {
+            return Ok(PublishOutcome::Skipped);
+        }
+        self.inner.publish(activity)?;
+        self.last_published = Some((activity.clone(), now));
+        Ok(PublishOutcome::Published)
+    }
+
+    pub fn clear(&mut self) -> Result<(), String> {
+        self.last_published = None;
+        self.inner.clear()
+    }
+}
+
 pub struct RuntimeEngine<T, S> {
     telemetry: T,
-    presence: S,
+    presence: PresencePublisher<S>,
     api: ApiState,
     game: GameStateMachine,
     session: SessionEngine,
@@ -63,7 +113,7 @@ where
     pub fn new(telemetry: T, presence: S, api: ApiState, started_at: DateTime<Utc>) -> Self {
         Self {
             telemetry,
-            presence,
+            presence: PresencePublisher::new(presence, Duration::from_secs(15)),
             api,
             game: GameStateMachine::default(),
             session: SessionEngine::new(started_at),
@@ -103,7 +153,7 @@ where
 
         match rendered {
             Ok(activity) => {
-                let publish_error = self.presence.publish(&activity).err();
+                let publish_error = self.presence.publish(&activity, now).err();
                 let connected = publish_error.is_none();
                 self.api.set_presence(Some(activity)).await;
                 self.api
@@ -175,7 +225,11 @@ pub struct DiscordPresenceSink {
 }
 
 impl DiscordPresenceSink {
-    pub fn new(application_id: impl AsRef<str>) -> Self {
+    pub fn canonical() -> Self {
+        Self::new(DiscordIdentity::application_id())
+    }
+
+    fn new(application_id: impl AsRef<str>) -> Self {
         Self {
             client: DiscordIpcClient::new(application_id),
             connected: false,
@@ -214,19 +268,6 @@ impl PresenceSink for DiscordPresenceSink {
             self.connected = false;
             error.to_string()
         })
-    }
-}
-
-#[derive(Default)]
-pub struct DisabledPresenceSink;
-
-impl PresenceSink for DisabledPresenceSink {
-    fn publish(&mut self, _activity: &DiscordActivity) -> Result<(), String> {
-        Err("Discord application ID is not configured".to_owned())
-    }
-
-    fn clear(&mut self) -> Result<(), String> {
-        Ok(())
     }
 }
 

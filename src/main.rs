@@ -19,8 +19,7 @@ use uuid::Uuid;
 use wt_presence::{
     api::{ApiState, router as api_router},
     config::SettingsStore,
-    discord_identity::DiscordIdentity,
-    runtime::{DiscordPresenceSink, PresenceSink, RuntimeEngine},
+    runtime::{DiscordPresenceSink, RuntimeEngine},
     storage::SessionRepository,
     telemetry::WtTelemetryClient,
 };
@@ -105,8 +104,7 @@ async fn spawn_runtime(
     settings: &wt_presence::config::AppSettings,
 ) -> Result<JoinHandle<()>> {
     let telemetry = WtTelemetryClient::new(settings.telemetry_url.clone())?;
-    let presence = Box::new(DiscordPresenceSink::new(DiscordIdentity::application_id()))
-        as Box<dyn PresenceSink>;
+    let presence = DiscordPresenceSink::canonical();
     let mut runtime = RuntimeEngine::new(telemetry, presence, api, Utc::now());
 
     Ok(tokio::spawn(async move {

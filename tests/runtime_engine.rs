@@ -1,14 +1,18 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::VecDeque,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use async_trait::async_trait;
-use chrono::{TimeZone, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use tempfile::tempdir;
 use wt_presence::{
     api::ApiState,
     config::{AppSettings, SettingsStore},
     domain::{Telemetry, VehicleKind},
     presence::DiscordActivity,
-    runtime::{PresenceSink, RuntimeEngine, TelemetrySource},
+    runtime::{PresencePublisher, PresenceSink, PublishOutcome, RuntimeEngine, TelemetrySource},
     state::Observation,
     storage::SessionRepository,
     telemetry::NormalizedTelemetry,
@@ -23,24 +27,286 @@ impl TelemetrySource for FakeSource {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Debug, PartialEq)]
+enum SinkEvent {
+    Publish(DiscordActivity),
+    Clear,
+}
+
+#[derive(Default)]
 struct FakeSink {
-    events: Arc<Mutex<Vec<String>>>,
+    events: Arc<Mutex<Vec<SinkEvent>>>,
+    publish_results: VecDeque<Result<(), String>>,
+    clear_error: Option<String>,
 }
 
 impl PresenceSink for FakeSink {
     fn publish(&mut self, activity: &DiscordActivity) -> Result<(), String> {
-        self.events.lock().unwrap().push(format!(
-            "publish:{}",
-            activity.details.as_deref().unwrap_or_default()
-        ));
-        Ok(())
+        self.events
+            .lock()
+            .unwrap()
+            .push(SinkEvent::Publish(activity.clone()));
+        self.publish_results.pop_front().unwrap_or(Ok(()))
     }
 
     fn clear(&mut self) -> Result<(), String> {
-        self.events.lock().unwrap().push("clear".to_owned());
-        Ok(())
+        self.events.lock().unwrap().push(SinkEvent::Clear);
+        self.clear_error.take().map_or(Ok(()), Err)
     }
+}
+
+fn activity() -> DiscordActivity {
+    DiscordActivity {
+        details: Some("J-7D".to_owned()),
+        state: Some("In battle".to_owned()),
+        large_image: Some("presence-air".to_owned()),
+        small_image: Some("squadron".to_owned()),
+        started_at: Some(1_700_000_000),
+    }
+}
+
+fn at(seconds: i64) -> DateTime<Utc> {
+    Utc.timestamp_opt(1_700_000_000 + seconds, 0).unwrap()
+}
+
+#[test]
+fn suppresses_identical_activities_until_heartbeat_but_publishes_changes() {
+    let sink = FakeSink::default();
+    let events = sink.events.clone();
+    let mut publisher = PresencePublisher::new(sink, Duration::from_secs(15));
+    let initial = activity();
+    let changed = DiscordActivity {
+        state: Some("Returning to hangar".to_owned()),
+        ..initial.clone()
+    };
+
+    assert_eq!(
+        publisher.publish(&initial, at(0)),
+        Ok(PublishOutcome::Published)
+    );
+    assert_eq!(
+        publisher.publish(&initial, at(1)),
+        Ok(PublishOutcome::Skipped)
+    );
+    assert_eq!(
+        publisher.publish(&changed, at(2)),
+        Ok(PublishOutcome::Published)
+    );
+    assert_eq!(
+        publisher.publish(&changed, at(16)),
+        Ok(PublishOutcome::Skipped)
+    );
+    assert_eq!(
+        publisher.publish(&changed, at(17)),
+        Ok(PublishOutcome::Published)
+    );
+    assert_eq!(
+        events.lock().unwrap().as_slice(),
+        [
+            SinkEvent::Publish(initial),
+            SinkEvent::Publish(changed.clone()),
+            SinkEvent::Publish(changed),
+        ]
+    );
+}
+
+#[test]
+fn every_activity_field_change_publishes_immediately() {
+    let initial = activity();
+    let changes = [
+        DiscordActivity {
+            details: Some("F-16C".to_owned()),
+            ..initial.clone()
+        },
+        DiscordActivity {
+            state: Some("In hangar".to_owned()),
+            ..initial.clone()
+        },
+        DiscordActivity {
+            large_image: Some("presence-ground".to_owned()),
+            ..initial.clone()
+        },
+        DiscordActivity {
+            small_image: None,
+            ..initial.clone()
+        },
+        DiscordActivity {
+            started_at: Some(1_700_000_001),
+            ..initial.clone()
+        },
+    ];
+
+    for changed in changes {
+        let sink = FakeSink::default();
+        let events = sink.events.clone();
+        let mut publisher = PresencePublisher::new(sink, Duration::from_secs(15));
+        assert_eq!(
+            publisher.publish(&initial, at(0)),
+            Ok(PublishOutcome::Published)
+        );
+
+        assert_eq!(
+            publisher.publish(&changed, at(1)),
+            Ok(PublishOutcome::Published)
+        );
+        assert_eq!(
+            events.lock().unwrap().as_slice(),
+            [
+                SinkEvent::Publish(initial.clone()),
+                SinkEvent::Publish(changed),
+            ]
+        );
+    }
+}
+
+#[test]
+fn clear_allows_the_same_activity_after_reconnect() {
+    let sink = FakeSink::default();
+    let events = sink.events.clone();
+    let mut publisher = PresencePublisher::new(sink, Duration::from_secs(15));
+    let activity = activity();
+
+    assert_eq!(
+        publisher.publish(&activity, at(0)),
+        Ok(PublishOutcome::Published)
+    );
+    assert_eq!(publisher.clear(), Ok(()));
+    assert_eq!(
+        publisher.publish(&activity, at(1)),
+        Ok(PublishOutcome::Published)
+    );
+    assert_eq!(
+        events.lock().unwrap().as_slice(),
+        [
+            SinkEvent::Publish(activity.clone()),
+            SinkEvent::Clear,
+            SinkEvent::Publish(activity),
+        ]
+    );
+}
+
+#[test]
+fn failed_clear_allows_the_same_activity_after_reconnect() {
+    let sink = FakeSink {
+        clear_error: Some("Discord disconnected".to_owned()),
+        ..FakeSink::default()
+    };
+    let events = sink.events.clone();
+    let mut publisher = PresencePublisher::new(sink, Duration::from_secs(15));
+    let activity = activity();
+
+    assert_eq!(
+        publisher.publish(&activity, at(0)),
+        Ok(PublishOutcome::Published)
+    );
+    assert_eq!(publisher.clear(), Err("Discord disconnected".to_owned()));
+    assert_eq!(
+        publisher.publish(&activity, at(1)),
+        Ok(PublishOutcome::Published)
+    );
+    assert_eq!(
+        events.lock().unwrap().as_slice(),
+        [
+            SinkEvent::Publish(activity.clone()),
+            SinkEvent::Clear,
+            SinkEvent::Publish(activity),
+        ]
+    );
+}
+
+#[test]
+fn failed_publish_is_retried_without_waiting_for_heartbeat() {
+    let sink = FakeSink {
+        publish_results: VecDeque::from([Err("Discord is not running".to_owned())]),
+        ..FakeSink::default()
+    };
+    let events = sink.events.clone();
+    let mut publisher = PresencePublisher::new(sink, Duration::from_secs(15));
+    let activity = activity();
+
+    assert_eq!(
+        publisher.publish(&activity, at(0)),
+        Err("Discord is not running".to_owned())
+    );
+    assert_eq!(
+        publisher.publish(&activity, at(1)),
+        Ok(PublishOutcome::Published)
+    );
+    assert_eq!(
+        events.lock().unwrap().as_slice(),
+        [
+            SinkEvent::Publish(activity.clone()),
+            SinkEvent::Publish(activity),
+        ]
+    );
+}
+
+#[test]
+fn failed_changed_publish_is_retried_without_waiting_for_heartbeat() {
+    let sink = FakeSink {
+        publish_results: VecDeque::from([Ok(()), Err("Discord disconnected".to_owned())]),
+        ..FakeSink::default()
+    };
+    let events = sink.events.clone();
+    let mut publisher = PresencePublisher::new(sink, Duration::from_secs(15));
+    let initial = activity();
+    let changed = DiscordActivity {
+        state: Some("In hangar".to_owned()),
+        ..initial.clone()
+    };
+
+    assert_eq!(
+        publisher.publish(&initial, at(0)),
+        Ok(PublishOutcome::Published)
+    );
+    assert_eq!(
+        publisher.publish(&changed, at(1)),
+        Err("Discord disconnected".to_owned())
+    );
+    assert_eq!(
+        publisher.publish(&changed, at(2)),
+        Ok(PublishOutcome::Published)
+    );
+    assert_eq!(
+        events.lock().unwrap().as_slice(),
+        [
+            SinkEvent::Publish(initial),
+            SinkEvent::Publish(changed.clone()),
+            SinkEvent::Publish(changed),
+        ]
+    );
+}
+
+#[test]
+fn failed_heartbeat_is_retried_without_waiting_for_another_interval() {
+    let sink = FakeSink {
+        publish_results: VecDeque::from([Ok(()), Err("Discord disconnected".to_owned())]),
+        ..FakeSink::default()
+    };
+    let events = sink.events.clone();
+    let mut publisher = PresencePublisher::new(sink, Duration::from_secs(15));
+    let activity = activity();
+
+    assert_eq!(
+        publisher.publish(&activity, at(0)),
+        Ok(PublishOutcome::Published)
+    );
+    assert_eq!(
+        publisher.publish(&activity, at(15)),
+        Err("Discord disconnected".to_owned())
+    );
+    assert_eq!(
+        publisher.publish(&activity, at(16)),
+        Ok(PublishOutcome::Published)
+    );
+    assert_eq!(
+        events.lock().unwrap().as_slice(),
+        [
+            SinkEvent::Publish(activity.clone()),
+            SinkEvent::Publish(activity.clone()),
+            SinkEvent::Publish(activity),
+        ]
+    );
 }
 
 fn api_state(directory: &tempfile::TempDir) -> ApiState {
@@ -79,7 +345,16 @@ async fn one_tick_publishes_presence_and_persists_the_session() {
 
     runtime.tick(now).await;
 
-    assert_eq!(events.lock().unwrap().as_slice(), ["publish:j 7d"]);
+    assert_eq!(
+        events.lock().unwrap().as_slice(),
+        [SinkEvent::Publish(DiscordActivity {
+            details: Some("j 7d".to_owned()),
+            state: Some("In battle".to_owned()),
+            large_image: Some("presence-air".to_owned()),
+            small_image: None,
+            started_at: None,
+        })]
+    );
     assert!(api.status().await.telemetry_connected);
     assert!(api.status().await.discord_connected);
     assert_eq!(api.snapshot().await.map.as_deref(), Some("Sinai"));
@@ -102,9 +377,104 @@ async fn an_unreachable_game_clears_presence_without_stopping_the_runtime() {
 
     runtime.tick(now).await;
 
-    assert_eq!(events.lock().unwrap().as_slice(), ["clear"]);
+    assert_eq!(events.lock().unwrap().as_slice(), [SinkEvent::Clear]);
     let status = api.status().await;
     assert!(!status.telemetry_connected);
     assert!(!status.discord_connected);
     assert!(status.last_error.unwrap().contains("unreachable"));
+}
+
+#[tokio::test]
+async fn runtime_suppresses_identical_presence_until_the_fifteen_second_heartbeat() {
+    let directory = tempdir().unwrap();
+    let api = api_state(&directory);
+    let sink = FakeSink::default();
+    let events = sink.events.clone();
+    let source = FakeSource(Ok(NormalizedTelemetry {
+        observation: Observation {
+            reachable: true,
+            map_valid: false,
+            vehicle_name: None,
+            vehicle_kind: VehicleKind::Unknown,
+            map_generation: None,
+        },
+        telemetry: Telemetry::default(),
+        map: None,
+        mode: None,
+    }));
+    let mut runtime = RuntimeEngine::new(source, sink, api.clone(), at(0));
+
+    runtime.tick(at(0)).await;
+    runtime.tick(at(1)).await;
+    runtime.tick(at(14)).await;
+    runtime.tick(at(15)).await;
+
+    let expected = DiscordActivity {
+        details: Some("War Thunder".to_owned()),
+        state: Some("In hangar".to_owned()),
+        large_image: Some("presence-hangar".to_owned()),
+        small_image: None,
+        started_at: None,
+    };
+    assert_eq!(
+        events.lock().unwrap().as_slice(),
+        [
+            SinkEvent::Publish(expected.clone()),
+            SinkEvent::Publish(expected),
+        ]
+    );
+    assert!(api.status().await.discord_connected);
+    assert_eq!(api.snapshot().await.captured_at, at(15));
+}
+
+#[tokio::test]
+async fn runtime_reconnects_when_discord_starts_after_the_first_tick() {
+    let directory = tempdir().unwrap();
+    let api = api_state(&directory);
+    let sink = FakeSink {
+        publish_results: VecDeque::from([Err("Discord is not running".to_owned())]),
+        ..FakeSink::default()
+    };
+    let events = sink.events.clone();
+    let source = FakeSource(Ok(NormalizedTelemetry {
+        observation: Observation {
+            reachable: true,
+            map_valid: false,
+            vehicle_name: None,
+            vehicle_kind: VehicleKind::Unknown,
+            map_generation: None,
+        },
+        telemetry: Telemetry::default(),
+        map: None,
+        mode: None,
+    }));
+    let mut runtime = RuntimeEngine::new(source, sink, api.clone(), at(0));
+
+    runtime.tick(at(0)).await;
+    let disconnected = api.status().await;
+    assert!(!disconnected.discord_connected);
+    assert_eq!(
+        disconnected.last_error.as_deref(),
+        Some("Discord is not running")
+    );
+
+    runtime.tick(at(1)).await;
+
+    let expected = DiscordActivity {
+        details: Some("War Thunder".to_owned()),
+        state: Some("In hangar".to_owned()),
+        large_image: Some("presence-hangar".to_owned()),
+        small_image: None,
+        started_at: None,
+    };
+    assert_eq!(
+        events.lock().unwrap().as_slice(),
+        [
+            SinkEvent::Publish(expected.clone()),
+            SinkEvent::Publish(expected),
+        ]
+    );
+    let connected = api.status().await;
+    assert!(connected.discord_connected);
+    assert!(connected.last_error.is_none());
 }
