@@ -19,7 +19,6 @@ pub struct AppSettings {
     pub schema_version: u32,
     pub telemetry_url: String,
     pub dashboard_port: u16,
-    pub discord_application_id: Option<String>,
     pub active_preset_id: String,
     pub presets: Vec<PresencePreset>,
     pub open_dashboard_on_start: bool,
@@ -29,10 +28,9 @@ pub struct AppSettings {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
-            schema_version: 1,
+            schema_version: 2,
             telemetry_url: "http://127.0.0.1:8111".to_owned(),
             dashboard_port: 32147,
-            discord_application_id: None,
             active_preset_id: "minimal".to_owned(),
             presets: vec![PresencePreset::minimal()],
             open_dashboard_on_start: true,
@@ -43,7 +41,7 @@ impl Default for AppSettings {
 
 impl AppSettings {
     pub fn validate(&self) -> Result<(), SettingsError> {
-        if self.schema_version != 1 {
+        if self.schema_version != 2 {
             return Err(SettingsError::Invalid(format!(
                 "unsupported settings schema version {}",
                 self.schema_version
@@ -123,8 +121,15 @@ impl SettingsStore {
 
         let file = File::open(&self.path)?;
         match serde_json::from_reader::<_, AppSettings>(BufReader::new(file)) {
-            Ok(settings) => {
+            Ok(mut settings) => {
+                let migrated = settings.schema_version == 1;
+                if migrated {
+                    settings.schema_version = 2;
+                }
                 settings.validate()?;
+                if migrated {
+                    self.save(&settings)?;
+                }
                 Ok(LoadedSettings {
                     settings,
                     recovered_from: None,

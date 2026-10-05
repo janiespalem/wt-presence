@@ -27,6 +27,27 @@ fn test_state(directory: &tempfile::TempDir) -> ApiState {
 }
 
 #[tokio::test]
+async fn settings_response_does_not_expose_obsolete_discord_id() {
+    let directory = tempdir().unwrap();
+    let response = router(test_state(&directory))
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/settings")
+                .header("x-wt-presence-token", "secret-token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["schema_version"], 2);
+    assert!(json.get("discord_application_id").is_none());
+}
+
+#[tokio::test]
 async fn rejects_requests_without_the_process_token() {
     let directory = tempdir().unwrap();
     let response = router(test_state(&directory))
