@@ -27,6 +27,20 @@ impl TelemetrySource for FakeSource {
     }
 }
 
+struct SequencedSource(Mutex<VecDeque<NormalizedTelemetry>>);
+
+#[async_trait]
+impl TelemetrySource for SequencedSource {
+    async fn poll(&self) -> Result<NormalizedTelemetry, String> {
+        Ok(self
+            .0
+            .lock()
+            .unwrap()
+            .pop_front()
+            .expect("telemetry fixture exhausted"))
+    }
+}
+
 #[derive(Debug, PartialEq)]
 enum SinkEvent {
     Publish(DiscordActivity),
@@ -278,6 +292,46 @@ fn failed_changed_publish_is_retried_without_waiting_for_heartbeat() {
 }
 
 #[test]
+fn failed_changed_publish_retries_previously_cached_activity() {
+    let sink = FakeSink {
+        publish_results: VecDeque::from([Ok(()), Err("Discord disconnected".to_owned())]),
+        ..FakeSink::default()
+    };
+    let events = sink.events.clone();
+    let mut publisher = PresencePublisher::new(sink, Duration::from_secs(15));
+    let initial = activity();
+    let changed = DiscordActivity {
+        state: Some("In hangar".to_owned()),
+        ..initial.clone()
+    };
+
+    assert_eq!(
+        publisher.publish(&initial, at(0)),
+        Ok(PublishOutcome::Published)
+    );
+    assert_eq!(
+        publisher.publish(&changed, at(1)),
+        Err("Discord disconnected".to_owned())
+    );
+    assert_eq!(
+        publisher.publish(&initial, at(2)),
+        Ok(PublishOutcome::Published)
+    );
+    assert_eq!(
+        publisher.publish(&initial, at(3)),
+        Ok(PublishOutcome::Skipped)
+    );
+    assert_eq!(
+        events.lock().unwrap().as_slice(),
+        [
+            SinkEvent::Publish(initial.clone()),
+            SinkEvent::Publish(changed),
+            SinkEvent::Publish(initial),
+        ]
+    );
+}
+
+#[test]
 fn failed_heartbeat_is_retried_without_waiting_for_another_interval() {
     let sink = FakeSink {
         publish_results: VecDeque::from([Ok(()), Err("Discord disconnected".to_owned())]),
@@ -477,4 +531,97 @@ async fn runtime_reconnects_when_discord_starts_after_the_first_tick() {
     let connected = api.status().await;
     assert!(connected.discord_connected);
     assert!(connected.last_error.is_none());
+}
+
+#[tokio::test]
+async fn runtime_keeps_disconnected_status_when_retrying_previously_cached_activity() {
+    let directory = tempdir().unwrap();
+    let api = api_state(&directory);
+    let sink = FakeSink {
+        publish_results: VecDeque::from([
+            Ok(()),
+            Err("Discord disconnected".to_owned()),
+            Err("Discord still disconnected".to_owned()),
+            Ok(()),
+        ]),
+        ..FakeSink::default()
+    };
+    let events = sink.events.clone();
+    let initial = NormalizedTelemetry {
+        observation: Observation {
+            reachable: true,
+            map_valid: true,
+            vehicle_name: Some("j_7d".to_owned()),
+            vehicle_kind: VehicleKind::Aircraft,
+            map_generation: Some(9),
+        },
+        telemetry: Telemetry::default(),
+        map: Some("Sinai".to_owned()),
+        mode: Some("Air Simulator".to_owned()),
+    };
+    let mut changed = initial.clone();
+    changed.observation.vehicle_name = Some("f_16c".to_owned());
+    let source = SequencedSource(Mutex::new(VecDeque::from([
+        initial.clone(),
+        changed,
+        initial.clone(),
+        initial.clone(),
+        initial,
+    ])));
+    let mut runtime = RuntimeEngine::new(source, sink, api.clone(), at(0));
+
+    runtime.tick(at(0)).await;
+    assert!(api.status().await.discord_connected);
+    assert!(api.status().await.last_error.is_none());
+
+    runtime.tick(at(1)).await;
+    let disconnected = api.status().await;
+    assert!(disconnected.telemetry_connected);
+    assert!(!disconnected.discord_connected);
+    assert_eq!(
+        disconnected.last_error.as_deref(),
+        Some("Discord disconnected")
+    );
+
+    runtime.tick(at(2)).await;
+    let still_disconnected = api.status().await;
+    assert!(still_disconnected.telemetry_connected);
+    assert!(!still_disconnected.discord_connected);
+    assert_eq!(
+        still_disconnected.last_error.as_deref(),
+        Some("Discord still disconnected")
+    );
+
+    runtime.tick(at(3)).await;
+    let recovered = api.status().await;
+    assert!(recovered.discord_connected);
+    assert!(recovered.last_error.is_none());
+
+    runtime.tick(at(4)).await;
+    assert!(api.status().await.discord_connected);
+    assert!(api.status().await.last_error.is_none());
+
+    let expected_initial = DiscordActivity {
+        details: Some("j 7d".to_owned()),
+        state: Some("In battle".to_owned()),
+        large_image: Some("presence-air".to_owned()),
+        small_image: None,
+        started_at: None,
+    };
+    let expected_changed = DiscordActivity {
+        details: Some("f 16c".to_owned()),
+        state: Some("In battle".to_owned()),
+        large_image: Some("presence-air".to_owned()),
+        small_image: None,
+        started_at: None,
+    };
+    assert_eq!(
+        events.lock().unwrap().as_slice(),
+        [
+            SinkEvent::Publish(expected_initial.clone()),
+            SinkEvent::Publish(expected_changed),
+            SinkEvent::Publish(expected_initial.clone()),
+            SinkEvent::Publish(expected_initial),
+        ]
+    );
 }

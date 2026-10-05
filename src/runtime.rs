@@ -84,7 +84,10 @@ impl<S: PresenceSink> PresencePublisher<S> {
         }) {
             return Ok(PublishOutcome::Skipped);
         }
-        self.inner.publish(activity)?;
+        if let Err(error) = self.inner.publish(activity) {
+            self.last_published = None;
+            return Err(error);
+        }
         self.last_published = Some((activity.clone(), now));
         Ok(PublishOutcome::Published)
     }
