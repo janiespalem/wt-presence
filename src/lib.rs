@@ -1,7 +1,9 @@
 pub mod api;
 pub mod config;
+pub mod discord_identity;
 pub mod domain;
 pub mod presence;
+pub mod preview;
 pub mod runtime;
 pub mod session;
 pub mod state;

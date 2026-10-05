@@ -20,6 +20,7 @@ import type {
   AppSettings,
   DiscordActivity,
   GameSnapshot,
+  PreviewScenario,
   RuntimeStatus,
   StoredSession,
 } from "./types";
@@ -32,6 +33,7 @@ const snapshot = ref<GameSnapshot | null>(null);
 const settings = ref<AppSettings | null>(null);
 const livePresence = ref<DiscordActivity | null>(null);
 const preview = ref<DiscordActivity | null>(null);
+const previewScenario = ref<PreviewScenario>("air");
 const sessions = ref<StoredSession[]>([]);
 const fatalError = ref("");
 const previewError = ref("");
@@ -39,11 +41,36 @@ const saveState = ref<"idle" | "saving" | "saved">("idle");
 let pollingTimer: number | undefined;
 let previewTimer: number | undefined;
 
+const previewScenarios: { value: PreviewScenario; label: string }[] = [
+  { value: "live", label: "Live" },
+  { value: "air", label: "Air" },
+  { value: "ground", label: "Ground" },
+  { value: "hangar", label: "Hangar" },
+];
+
+const artworkChoices: { value: string | null; label: string }[] = [
+  { value: null, label: "Automatic" },
+  { value: "presence-default", label: "Default" },
+  { value: "presence-air", label: "Air" },
+  { value: "presence-ground", label: "Ground" },
+  { value: "presence-naval", label: "Naval" },
+  { value: "presence-hangar", label: "Hangar" },
+];
+
 const activePreset = computed(() =>
   settings.value?.presets.find(
     (preset) => preset.id === settings.value?.active_preset_id,
   ),
 );
+
+const preservedArtwork = computed(() => {
+  const value = activePreset.value?.large_image;
+  if (value == null || artworkChoices.some((choice) => choice.value === value)) return null;
+  return {
+    value,
+    label: value === "war_thunder" ? "Legacy · war_thunder" : `Custom · ${value}`,
+  };
+});
 
 const gameLabel = computed(() => {
   const phase = snapshot.value?.phase;
@@ -115,7 +142,7 @@ async function load(): Promise<void> {
 async function refreshPreview(): Promise<void> {
   if (!activePreset.value) return;
   try {
-    preview.value = await api.preview(activePreset.value);
+    preview.value = await api.preview(activePreset.value, previewScenario.value);
     previewError.value = "";
   } catch (error) {
     previewError.value = error instanceof Error ? error.message : String(error);
@@ -136,7 +163,10 @@ async function save(): Promise<void> {
 }
 
 watch(
-  () => (activePreset.value ? JSON.stringify(activePreset.value) : ""),
+  () => [
+    activePreset.value ? JSON.stringify(activePreset.value) : "",
+    previewScenario.value,
+  ],
   () => {
     window.clearTimeout(previewTimer);
     previewTimer = window.setTimeout(refreshPreview, 220);
@@ -232,9 +262,9 @@ onBeforeUnmount(() => {
               <b>{{ status?.discord_connected ? "TRANSMITTING" : "STANDBY" }}</b>
             </div>
             <div class="discord-preview compact">
-              <div class="presence-art"><Plane :size="40" /></div>
+              <div class="presence-art" aria-hidden="true"><span>TEXT ONLY</span></div>
               <div>
-                <span>PLAYING WAR THUNDER</span>
+                <span>WT Presence · TEXT-ONLY PREVIEW</span>
                 <strong>{{ livePresence?.details ?? "No activity published" }}</strong>
                 <p>{{ livePresence?.state ?? "Discord is waiting for a link." }}</p>
               </div>
@@ -275,25 +305,22 @@ onBeforeUnmount(() => {
             <input v-model="activePreset.state_template" spellcheck="false" />
             <small>Example: <code v-pre>{{ telemetry.ias | round }} km/h</code></small>
           </label>
-          <div class="field-row">
-            <label>
-              <span>LARGE ASSET</span>
-              <input v-model="activePreset.large_image" placeholder="war_thunder" />
-            </label>
-            <label>
-              <span>SMALL ASSET</span>
-              <input v-model="activePreset.small_image" placeholder="optional" />
-            </label>
-          </div>
+          <label>
+            <span>ARTWORK</span>
+            <select v-model="activePreset.large_image">
+              <option v-for="artwork in artworkChoices" :key="artwork.label" :value="artwork.value">
+                {{ artwork.label }}
+              </option>
+              <option v-if="preservedArtwork" :value="preservedArtwork.value">
+                {{ preservedArtwork.label }}
+              </option>
+            </select>
+            <small>Automatic follows the game phase and vehicle type.</small>
+          </label>
           <label class="switch-line">
             <input v-model="activePreset.show_elapsed" type="checkbox" />
             <span>Show elapsed sortie time</span>
           </label>
-          <div class="restart-note">
-            Discord Application ID
-            <input v-model="settings.discord_application_id" placeholder="Not configured" />
-            <small>Changing the application ID takes effect after restart.</small>
-          </div>
           <button class="save-button" :disabled="saveState === 'saving'" @click="save">
             <Check v-if="saveState === 'saved'" :size="18" />
             <Save v-else :size="18" />
@@ -302,11 +329,28 @@ onBeforeUnmount(() => {
         </div>
 
         <aside class="preview-column">
-          <span class="eyebrow">LIVE PREVIEW</span>
-          <div class="discord-preview large">
-            <div class="presence-art"><Plane :size="58" /></div>
+          <div class="preview-heading">
             <div>
-              <span>PLAYING WAR THUNDER</span>
+              <span class="eyebrow">PREVIEW LAB</span>
+              <small>TEST SIGNAL</small>
+            </div>
+            <div class="scenario-rail" role="group" aria-label="Preview scenario">
+              <button
+                v-for="scenario in previewScenarios"
+                :key="scenario.value"
+                type="button"
+                :class="{ active: previewScenario === scenario.value }"
+                :aria-pressed="previewScenario === scenario.value"
+                @click="previewScenario = scenario.value"
+              >
+                {{ scenario.label }}
+              </button>
+            </div>
+          </div>
+          <div class="discord-preview large">
+            <div class="presence-art" aria-hidden="true"><span>TEXT ONLY</span></div>
+            <div>
+              <span>WT Presence · TEXT-ONLY PREVIEW</span>
               <strong>{{ preview?.details ?? "—" }}</strong>
               <p>{{ preview?.state ?? "—" }}</p>
               <small v-if="preview?.started_at">elapsed time enabled</small>
@@ -317,6 +361,11 @@ onBeforeUnmount(() => {
             <strong>AVAILABLE SIGNALS</strong>
             <code>vehicle.name</code><code>game.mode</code><code>game.map</code>
             <code>telemetry.ias</code><code>telemetry.agl</code><code>session.kills</code>
+          </div>
+          <div class="discord-guidance">
+            <strong>DISCORD SETUP</strong>
+            <p>Keep Discord Desktop running. WT Presence connects automatically.</p>
+            <p>To show only the WT Presence card, disable War Thunder in Discord under <b>User Settings → Registered Games</b>. Change this setting once in Discord.</p>
           </div>
         </aside>
       </section>
@@ -348,6 +397,10 @@ onBeforeUnmount(() => {
               <div><dt>Agent version</dt><dd>v{{ status?.version ?? "—" }}</dd></div>
               <div><dt>Last update</dt><dd>{{ status ? date(status.updated_at) : "—" }}</dd></div>
             </dl>
+            <div class="discord-guidance">
+              <strong>ONE VISIBLE ACTIVITY</strong>
+              <p>Disable War Thunder under Discord's <b>User Settings → Registered Games</b> if you want WT Presence to be the only visible card. Change this setting once in Discord.</p>
+            </div>
           </article>
           <article class="panel">
             <div class="panel-heading"><span><ShieldCheck :size="18" /> Privacy boundary</span></div>

@@ -1,4 +1,5 @@
 export type GamePhase = "offline" | "hangar" | "loading" | "battle";
+export type PreviewScenario = "live" | "hangar" | "air" | "ground";
 
 export interface Telemetry {
   speed_ias_kph: number | null;
@@ -48,7 +49,6 @@ export interface AppSettings {
   schema_version: number;
   telemetry_url: string;
   dashboard_port: number;
-  discord_application_id: string | null;
   active_preset_id: string;
   presets: PresencePreset[];
   open_dashboard_on_start: boolean;

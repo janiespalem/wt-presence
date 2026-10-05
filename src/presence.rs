@@ -4,6 +4,7 @@ use serde_json::json;
 use thiserror::Error;
 
 use crate::{
+    discord_identity::{DiscordIdentity, PresenceArtwork},
     domain::{GamePhase, GameSnapshot},
     session::SessionSummary,
 };
@@ -29,7 +30,7 @@ impl PresencePreset {
             details_template: "{% if vehicle %}{{ vehicle.name }}{% else %}War Thunder{% endif %}"
                 .to_owned(),
             state_template: "{{ game.phase_label }}".to_owned(),
-            large_image: Some("war_thunder".to_owned()),
+            large_image: None,
             small_image: None,
             show_elapsed: false,
         }
@@ -96,11 +97,17 @@ impl PresenceRenderer {
         Ok(DiscordActivity {
             details,
             state,
-            large_image: preset.large_image.clone(),
+            large_image: Some(match preset.large_image.as_deref() {
+                None => {
+                    DiscordIdentity::asset_key(DiscordIdentity::artwork_for(snapshot)).to_owned()
+                }
+                Some("war_thunder") => {
+                    DiscordIdentity::asset_key(PresenceArtwork::Default).to_owned()
+                }
+                Some(key) => key.to_owned(),
+            }),
             small_image: preset.small_image.clone(),
-            started_at: preset
-                .show_elapsed
-                .then(|| snapshot.captured_at.timestamp()),
+            started_at: preset.show_elapsed.then(|| session.started_at.timestamp()),
         })
     }
 }

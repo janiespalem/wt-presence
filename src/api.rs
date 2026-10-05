@@ -16,7 +16,8 @@ use tokio::sync::RwLock;
 use crate::{
     config::{AppSettings, SettingsError, SettingsStore},
     domain::GameSnapshot,
-    presence::{DiscordActivity, PresenceError, PresencePreset, PresenceRenderer},
+    presence::{DiscordActivity, PresenceError},
+    preview::{PreviewRequest, render_preview},
     session::{SessionEngine, SessionSummary},
     storage::{SessionRepository, StorageError, StoredSession},
 };
@@ -193,12 +194,11 @@ async fn put_settings(
 
 async fn post_preview(
     State(state): State<ApiState>,
-    Json(preset): Json<PresencePreset>,
+    Json(request): Json<PreviewRequest>,
 ) -> Result<Json<DiscordActivity>, ApiError> {
     let snapshot = state.inner.snapshot.read().await.clone();
     let session = state.inner.session.read().await.clone();
-    let activity = PresenceRenderer::new()
-        .render(&snapshot, &session, &preset)
+    let activity = render_preview(&snapshot, &session, &request.preset, request.scenario)
         .map_err(ApiError::presence)?;
     Ok(Json(activity))
 }
