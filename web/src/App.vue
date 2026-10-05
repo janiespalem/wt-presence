@@ -48,6 +48,15 @@ const previewScenarios: { value: PreviewScenario; label: string }[] = [
   { value: "hangar", label: "Hangar" },
 ];
 
+const artworkChoices: { value: string | null; label: string }[] = [
+  { value: null, label: "Automatic" },
+  { value: "presence-default", label: "Default" },
+  { value: "presence-air", label: "Air" },
+  { value: "presence-ground", label: "Ground" },
+  { value: "presence-naval", label: "Naval" },
+  { value: "presence-hangar", label: "Hangar" },
+];
+
 const activePreset = computed(() =>
   settings.value?.presets.find(
     (preset) => preset.id === settings.value?.active_preset_id,
@@ -287,25 +296,19 @@ onBeforeUnmount(() => {
             <input v-model="activePreset.state_template" spellcheck="false" />
             <small>Example: <code v-pre>{{ telemetry.ias | round }} km/h</code></small>
           </label>
-          <div class="field-row">
-            <label>
-              <span>LARGE ASSET</span>
-              <input v-model="activePreset.large_image" placeholder="war_thunder" />
-            </label>
-            <label>
-              <span>SMALL ASSET</span>
-              <input v-model="activePreset.small_image" placeholder="optional" />
-            </label>
-          </div>
+          <label>
+            <span>ARTWORK</span>
+            <select v-model="activePreset.large_image">
+              <option v-for="artwork in artworkChoices" :key="artwork.label" :value="artwork.value">
+                {{ artwork.label }}
+              </option>
+            </select>
+            <small>Automatic follows the game phase and vehicle type.</small>
+          </label>
           <label class="switch-line">
             <input v-model="activePreset.show_elapsed" type="checkbox" />
             <span>Show elapsed sortie time</span>
           </label>
-          <div class="restart-note">
-            Discord Application ID
-            <input v-model="settings.discord_application_id" placeholder="Not configured" />
-            <small>Changing the application ID takes effect after restart.</small>
-          </div>
           <button class="save-button" :disabled="saveState === 'saving'" @click="save">
             <Check v-if="saveState === 'saved'" :size="18" />
             <Save v-else :size="18" />
@@ -347,6 +350,11 @@ onBeforeUnmount(() => {
             <code>vehicle.name</code><code>game.mode</code><code>game.map</code>
             <code>telemetry.ias</code><code>telemetry.agl</code><code>session.kills</code>
           </div>
+          <div class="discord-guidance">
+            <strong>DISCORD SETUP</strong>
+            <p>Keep Discord Desktop running. WT Presence connects automatically.</p>
+            <p>To show only the WT Presence card, disable War Thunder in Discord under <b>User Settings → Registered Games</b>. Change this setting once in Discord.</p>
+          </div>
         </aside>
       </section>
 
@@ -377,6 +385,10 @@ onBeforeUnmount(() => {
               <div><dt>Agent version</dt><dd>v{{ status?.version ?? "—" }}</dd></div>
               <div><dt>Last update</dt><dd>{{ status ? date(status.updated_at) : "—" }}</dd></div>
             </dl>
+            <div class="discord-guidance">
+              <strong>ONE VISIBLE ACTIVITY</strong>
+              <p>Disable War Thunder under Discord's <b>User Settings → Registered Games</b> if you want WT Presence to be the only visible card. Change this setting once in Discord.</p>
+            </div>
           </article>
           <article class="panel">
             <div class="panel-heading"><span><ShieldCheck :size="18" /> Privacy boundary</span></div>
