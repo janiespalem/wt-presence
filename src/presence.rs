@@ -100,7 +100,7 @@ impl PresenceRenderer {
             small_image: preset.small_image.clone(),
             started_at: preset
                 .show_elapsed
-                .then(|| snapshot.captured_at.timestamp()),
+                .then(|| session.started_at.timestamp()),
         })
     }
 }

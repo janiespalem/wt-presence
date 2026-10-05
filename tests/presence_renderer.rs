@@ -54,6 +54,45 @@ fn renders_configurable_presence_from_normalized_context() {
 }
 
 #[test]
+fn keeps_session_start_when_presence_status_changes() {
+    let session_start = Utc.timestamp_opt(1_700_000_000, 0).unwrap();
+    let mut session = SessionEngine::new(session_start);
+    let preset = PresencePreset {
+        show_elapsed: true,
+        ..PresencePreset::minimal()
+    };
+
+    let hangar = GameSnapshot {
+        phase: GamePhase::Hangar,
+        captured_at: Utc.timestamp_opt(1_700_000_030, 0).unwrap(),
+        ..GameSnapshot::default()
+    };
+    let hangar_summary = session.apply(&hangar, &[]);
+    let hangar_activity = PresenceRenderer::new()
+        .render(&hangar, &hangar_summary, &preset)
+        .unwrap();
+
+    let battle = GameSnapshot {
+        phase: GamePhase::Battle,
+        battle_id: Some(BattleId::new()),
+        vehicle: Some(Vehicle {
+            technical_name: "j_7d".to_owned(),
+            display_name: "J-7D".to_owned(),
+            kind: VehicleKind::Aircraft,
+        }),
+        captured_at: Utc.timestamp_opt(1_700_000_090, 0).unwrap(),
+        ..GameSnapshot::default()
+    };
+    let battle_summary = session.apply(&battle, &[]);
+    let battle_activity = PresenceRenderer::new()
+        .render(&battle, &battle_summary, &preset)
+        .unwrap();
+
+    assert_eq!(hangar_activity.started_at, Some(1_700_000_000));
+    assert_eq!(battle_activity.started_at, Some(1_700_000_000));
+}
+
+#[test]
 fn unknown_template_variable_returns_an_actionable_error() {
     let (snapshot, session) = context();
     let preset = PresencePreset {
