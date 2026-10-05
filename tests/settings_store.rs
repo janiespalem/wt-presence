@@ -107,17 +107,21 @@ fn migrates_schema_one_without_losing_user_configuration() {
 
 #[test]
 fn rejects_future_schema_without_recovering_or_rewriting_settings() {
-    let directory = tempdir().unwrap();
-    let path = directory.path().join("settings.json");
-    let original = r#"{"schema_version": 42, "future_preference": "keep me"}"#;
-    fs::write(&path, original).unwrap();
-    let store = SettingsStore::new(&path);
+    for original in [
+        r#"{"schema_version": 42, "future_preference": "keep me"}"#,
+        r#"{"schema_version": 42, "telemetry_url": {"host": "localhost", "port": 8222}}"#,
+    ] {
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("settings.json");
+        fs::write(&path, original).unwrap();
+        let store = SettingsStore::new(&path);
 
-    let error = store.load_or_create().unwrap_err();
+        let error = store.load_or_create().unwrap_err();
 
-    assert!(matches!(error, SettingsError::Invalid(_)));
-    assert_eq!(fs::read_to_string(path).unwrap(), original);
-    assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+        assert!(matches!(error, SettingsError::Invalid(_)));
+        assert_eq!(fs::read_to_string(path).unwrap(), original);
+        assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+    }
 }
 
 #[test]

@@ -120,7 +120,23 @@ impl SettingsStore {
         }
 
         let file = File::open(&self.path)?;
-        match serde_json::from_reader::<_, AppSettings>(BufReader::new(file)) {
+        let document = serde_json::from_reader::<_, serde_json::Value>(BufReader::new(file));
+        let parsed_settings = match document {
+            Ok(document) => {
+                if let Some(version) = document
+                    .get("schema_version")
+                    .and_then(serde_json::Value::as_u64)
+                    && !matches!(version, 1 | 2)
+                {
+                    return Err(SettingsError::Invalid(format!(
+                        "unsupported settings schema version {version}"
+                    )));
+                }
+                serde_json::from_value::<AppSettings>(document)
+            }
+            Err(error) => Err(error),
+        };
+        match parsed_settings {
             Ok(mut settings) => {
                 let migrated = settings.schema_version == 1;
                 if migrated {
