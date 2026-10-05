@@ -1,6 +1,6 @@
 # Discord Identity
 
-Status: proposed; awaiting implementation approval
+Status: implemented; portal verification pending
 
 ## Product promise
 
@@ -85,6 +85,8 @@ Repeated identical activities are suppressed between 15-second heartbeats. Any v
 ## Distribution and portal setup
 
 Repository assets include the source artwork and exported PNG files. Uploading the application icon and rich-presence asset keys to Discord's Developer Portal is a release task because Discord does not accept those uploads through the local IPC client.
+
+The original SVG masters, 1024×1024 PNG exports, exact asset-key manifest, and maintainer checklist are in [`assets/brand/`](../../assets/brand/README.md). The portal application is currently named `12`; the maintainer must rename it to `WT Presence`, set the application icon, and upload all five keyed assets before release. Portal upload and Windows/Discord verification remain pending. Record successful manual verification in a separate follow-up commit before changing this status to `implemented and manually verified`.
 
 A release is not considered ready until a clean Discord account verifies:
 
