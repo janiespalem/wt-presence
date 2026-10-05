@@ -43,7 +43,7 @@ presence-naval
 presence-hangar
 ```
 
-The application icon is the fallback. A known game phase or vehicle domain selects a corresponding large asset. Missing assets fall back to `presence-default`; they never produce a blank Discord card.
+The application icon is the fallback. A known game phase or vehicle domain selects a corresponding large asset. Unknown semantic states and the legacy `war_thunder` key resolve to `presence-default`. The release gate verifies that every referenced portal asset exists; local IPC cannot inspect the portal catalog at runtime.
 
 ## Client architecture
 
@@ -80,7 +80,7 @@ The dashboard removes the Discord Application ID control. It instead reports one
 
 Changing phase, vehicle, map, details, or state updates the existing rich presence while retaining the session start timestamp. The activity is cleared only when War Thunder becomes unavailable or the application exits.
 
-Repeated identical activities are not republished. This avoids unnecessary IPC traffic and makes status transitions deterministic.
+Repeated identical activities are suppressed between 15-second heartbeats. Any visible change publishes immediately. A heartbeat rechecks the IPC connection so Discord can recover after being closed and reopened without waiting for another game-state change.
 
 ## Distribution and portal setup
 
