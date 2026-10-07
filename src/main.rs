@@ -14,11 +14,12 @@ use tower_http::{
     trace::TraceLayer,
 };
 use tracing::{error, info, warn};
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 use uuid::Uuid;
 use wt_presence::{
     api::{ApiState, router as api_router},
     config::SettingsStore,
+    diagnostics::prune_old_logs,
     runtime::{DiscordPresenceSink, RuntimeEngine},
     storage::SessionRepository,
     telemetry::WtTelemetryClient,
@@ -29,16 +30,32 @@ mod windows_tray;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-        )
-        .compact()
-        .init();
-
     let paths = AppPaths::discover()?;
     std::fs::create_dir_all(&paths.data_dir)
         .with_context(|| format!("create data directory {}", paths.data_dir.display()))?;
+    let logs = paths.data_dir.join("logs");
+    std::fs::create_dir_all(&logs)
+        .with_context(|| format!("create log directory {}", logs.display()))?;
+    let cleanup = prune_old_logs(&logs, Utc::now().date_naive(), 7);
+    let file_appender = tracing_appender::rolling::RollingFileAppender::builder()
+        .rotation(tracing_appender::rolling::Rotation::DAILY)
+        .filename_prefix("wt-presence.log")
+        .max_log_files(7)
+        .build(&logs)?;
+    let (file_writer, _log_guard) = tracing_appender::non_blocking(file_appender);
+    tracing_subscriber::registry()
+        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .with(tracing_subscriber::fmt::layer().compact())
+        .with(
+            tracing_subscriber::fmt::layer()
+                .compact()
+                .with_ansi(false)
+                .with_writer(file_writer),
+        )
+        .init();
+    if cleanup.is_err() {
+        warn!("could not remove expired logs; startup will continue");
+    }
 
     let settings_store = SettingsStore::new(&paths.settings);
     let loaded = settings_store.load_or_create()?;
@@ -69,8 +86,8 @@ async fn main() -> Result<()> {
     let (_exit_sender, exit_receiver) = tokio::sync::mpsc::unbounded_channel();
     #[cfg(windows)]
     let _tray = windows_tray::WindowsTray::start(dashboard_url.clone(), _exit_sender.clone())?;
-    info!(url = %origin, web_root = %web_root.display(), "WT Presence is ready");
-    if settings.open_dashboard_on_start
+    info!(url = %origin, "WT Presence is ready");
+    if settings.should_open_dashboard()
         && let Err(error) = webbrowser::open(&dashboard_url)
     {
         warn!(%error, "could not open the dashboard automatically");

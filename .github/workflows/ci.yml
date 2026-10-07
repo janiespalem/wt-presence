@@ -29,9 +29,16 @@ jobs:
         working-directory: web
         run: |
           npm ci
+          npm test
           npm run build
       - name: Check formatting
         run: cargo fmt --check
+      - name: Browser checks
+        if: runner.os == 'Linux'
+        working-directory: web
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:e2e
       - name: Lint
         run: cargo clippy --all-targets --all-features -- -D warnings
       - name: Test

@@ -41,6 +41,19 @@ impl TelemetrySource for SequencedSource {
     }
 }
 
+struct SequencedResultSource(Mutex<VecDeque<Result<NormalizedTelemetry, String>>>);
+
+#[async_trait]
+impl TelemetrySource for SequencedResultSource {
+    async fn poll(&self) -> Result<NormalizedTelemetry, String> {
+        self.0
+            .lock()
+            .unwrap()
+            .pop_front()
+            .expect("telemetry fixture exhausted")
+    }
+}
+
 #[derive(Debug, PartialEq)]
 enum SinkEvent {
     Publish(DiscordActivity),
@@ -469,6 +482,43 @@ async fn an_unreachable_game_clears_presence_without_stopping_the_runtime() {
     assert!(!status.telemetry_connected);
     assert!(!status.discord_connected);
     assert!(status.last_error.unwrap().contains("unreachable"));
+}
+
+#[tokio::test]
+async fn runtime_health_keeps_start_and_last_success_times_across_disconnects() {
+    let directory = tempdir().unwrap();
+    let api = api_state(&directory);
+    let source = SequencedResultSource(Mutex::new(VecDeque::from([
+        Ok(NormalizedTelemetry {
+            observation: Observation {
+                reachable: true,
+                map_valid: false,
+                vehicle_name: None,
+                vehicle_kind: VehicleKind::Unknown,
+                map_generation: None,
+            },
+            telemetry: Telemetry::default(),
+            map: None,
+            mode: None,
+        }),
+        Err("War Thunder is unreachable".to_owned()),
+    ])));
+    let started_at = at(-30);
+    let mut runtime = RuntimeEngine::new(source, FakeSink::default(), api.clone(), started_at);
+
+    runtime.tick(at(0)).await;
+    let connected = api.status().await;
+    assert_eq!(connected.started_at, started_at);
+    assert_eq!(connected.last_telemetry_at, Some(at(0)));
+    assert_eq!(connected.last_discord_at, Some(at(0)));
+
+    runtime.tick(at(5)).await;
+    let disconnected = api.status().await;
+    assert_eq!(disconnected.started_at, started_at);
+    assert_eq!(disconnected.last_telemetry_at, Some(at(0)));
+    assert_eq!(disconnected.last_discord_at, Some(at(0)));
+    assert!(!disconnected.telemetry_connected);
+    assert!(!disconnected.discord_connected);
 }
 
 #[tokio::test]

@@ -31,8 +31,18 @@ export interface RuntimeStatus {
   version: string;
   telemetry_connected: boolean;
   discord_connected: boolean;
+  started_at: string;
+  last_telemetry_at: string | null;
+  last_discord_at: string | null;
   last_error: string | null;
   updated_at: string;
+}
+
+export interface DiagnosticReport extends Omit<RuntimeStatus, "last_error"> {
+  has_error: boolean;
+  platform: string;
+  architecture: string;
+  phase: GamePhase;
 }
 
 export interface PresencePreset {

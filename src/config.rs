@@ -40,6 +40,10 @@ impl Default for AppSettings {
 }
 
 impl AppSettings {
+    pub fn should_open_dashboard(&self) -> bool {
+        self.open_dashboard_on_start && !self.start_minimized
+    }
+
     pub fn validate(&self) -> Result<(), SettingsError> {
         if self.schema_version != 2 {
             return Err(SettingsError::Invalid(format!(
