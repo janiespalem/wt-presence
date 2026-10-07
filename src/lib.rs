@@ -1,5 +1,6 @@
 pub mod api;
 pub mod config;
+pub mod diagnostics;
 pub mod discord_identity;
 pub mod domain;
 pub mod presence;

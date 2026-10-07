@@ -106,6 +106,9 @@ pub struct RuntimeEngine<T, S> {
     session: SessionEngine,
     session_id: String,
     renderer: PresenceRenderer,
+    started_at: DateTime<Utc>,
+    last_telemetry_at: Option<DateTime<Utc>>,
+    last_discord_at: Option<DateTime<Utc>>,
 }
 
 impl<T, S> RuntimeEngine<T, S>
@@ -122,6 +125,9 @@ where
             session: SessionEngine::new(started_at),
             session_id: Uuid::new_v4().to_string(),
             renderer: PresenceRenderer::new(),
+            started_at,
+            last_telemetry_at: None,
+            last_discord_at: None,
         }
     }
 
@@ -133,6 +139,7 @@ where
     }
 
     async fn handle_telemetry(&mut self, telemetry: NormalizedTelemetry, now: DateTime<Utc>) {
+        self.last_telemetry_at = Some(now);
         let mut snapshot = self.game.observe(telemetry.observation).current;
         snapshot.telemetry = telemetry.telemetry;
         snapshot.map = telemetry.map;
@@ -156,29 +163,21 @@ where
 
         match rendered {
             Ok(activity) => {
-                let publish_error = self.presence.publish(&activity, now).err();
-                let connected = publish_error.is_none();
+                let publish_result = self.presence.publish(&activity, now);
+                if matches!(publish_result, Ok(PublishOutcome::Published)) {
+                    self.last_discord_at = Some(now);
+                }
+                let connected = publish_result.is_ok();
+                let publish_error = publish_result.err();
                 self.api.set_presence(Some(activity)).await;
-                self.api
-                    .set_status(RuntimeStatus {
-                        telemetry_connected: true,
-                        discord_connected: connected,
-                        last_error: publish_error.or(storage_error),
-                        ..RuntimeStatus::default()
-                    })
-                    .await;
+                let status = self.runtime_status(true, connected, publish_error.or(storage_error));
+                self.api.set_status(status).await;
             }
             Err(error) => {
                 let _ = self.presence.clear();
                 self.api.set_presence(None).await;
-                self.api
-                    .set_status(RuntimeStatus {
-                        telemetry_connected: true,
-                        discord_connected: false,
-                        last_error: Some(error.to_string()),
-                        ..RuntimeStatus::default()
-                    })
-                    .await;
+                let status = self.runtime_status(true, false, Some(error.to_string()));
+                self.api.set_status(status).await;
             }
         }
     }
@@ -207,18 +206,30 @@ where
         self.api.set_game_state(snapshot, session).await;
         let clear_error = self.presence.clear().err();
         self.api.set_presence(None).await;
-        self.api
-            .set_status(RuntimeStatus {
-                telemetry_connected: false,
-                discord_connected: false,
-                last_error: Some(
-                    clear_error
-                        .or(storage_error)
-                        .map_or(error.clone(), |secondary| format!("{error}; {secondary}")),
-                ),
-                ..RuntimeStatus::default()
-            })
-            .await;
+        let last_error = Some(
+            clear_error
+                .or(storage_error)
+                .map_or(error.clone(), |secondary| format!("{error}; {secondary}")),
+        );
+        let status = self.runtime_status(false, false, last_error);
+        self.api.set_status(status).await;
+    }
+
+    fn runtime_status(
+        &self,
+        telemetry_connected: bool,
+        discord_connected: bool,
+        last_error: Option<String>,
+    ) -> RuntimeStatus {
+        RuntimeStatus {
+            telemetry_connected,
+            discord_connected,
+            started_at: self.started_at,
+            last_telemetry_at: self.last_telemetry_at,
+            last_discord_at: self.last_discord_at,
+            last_error,
+            ..RuntimeStatus::default()
+        }
     }
 }
 

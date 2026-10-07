@@ -1,5 +1,6 @@
 import type {
   AppSettings,
+  DiagnosticReport,
   DiscordActivity,
   GameSnapshot,
   PresencePreset,
@@ -25,6 +26,7 @@ const token = processToken();
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
+    signal: AbortSignal.timeout(5000),
     ...init,
     headers: {
       "x-wt-presence-token": token,
@@ -34,12 +36,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const body = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
+    throw new Error(
+      body?.error?.message ?? `Request failed (${response.status})`,
+    );
   }
   return body as T;
 }
 
 export const api = {
+  diagnostics: () => request<DiagnosticReport>("/api/v1/diagnostics"),
   status: () => request<RuntimeStatus>("/api/v1/status"),
   snapshot: () => request<GameSnapshot>("/api/v1/snapshot"),
   settings: () => request<AppSettings>("/api/v1/settings"),

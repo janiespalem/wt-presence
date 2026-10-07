@@ -2,11 +2,11 @@
 
 > Fight the battle. Broadcast your signature.
 
-Privacy-first, configurable Discord Rich Presence for War Thunder. WT Presence reads the game's loopback telemetry, renders it through editable activity templates, and talks to Discord through its local IPC socket. No Gaijin login. No cloud account.
+Configurable Discord Rich Presence for War Thunder. A small Windows tray app reads local game data and updates Discord. Settings open in your browser; closing that page does not stop the app. No Gaijin login or cloud account.
 
 WT Presence is an unofficial project and is not affiliated with Gaijin Entertainment.
 
-![WT Presence Preview Lab](docs/assets/dashboard-preview-lab.png)
+![WT Presence settings in Russian, with an offline aircraft preview](docs/assets/dashboard-preview-lab.png)
 
 Windows 10/11 x64 is the first supported target. The project is in beta.
 
@@ -14,12 +14,14 @@ Windows 10/11 x64 is the first supported target. The project is in beta.
 
 - Automatic offline, hangar, loading, and battle detection.
 - Live vehicle, mode, map, speed, altitude, and crew data when War Thunder exposes it.
-- Editable Discord details and state templates.
-- Air, ground, and hangar fixtures in Preview Lab — no running game or Discord connection required.
-- Optional elapsed sortie time and bundled artwork with automatic phase and vehicle selection.
+- English and Russian settings, with help beside every field.
+- Two editable status lines with a menu for vehicle, speed, map, crew, and game status.
+- Aircraft, ground, and hangar previews that work without the game or Discord.
+- Optional elapsed application-session time and automatic artwork. Changing vehicle or game phase keeps the timer running.
 - Local session summaries stored in SQLite.
 - A loopback-only dashboard protected by a per-process token.
 - A user-local Windows installer and tray integration.
+- Connection diagnostics, a redacted support report, and up to seven daily local logs.
 
 Combat-event attribution and [Combat Signature](docs/design/combat-signature.md) are designed but not implemented yet. StatShark is not a runtime dependency; possible career-stat integration remains a future optional adapter.
 
@@ -37,17 +39,29 @@ WT Presence includes its Discord identity and artwork. No Application ID, Develo
 2. Start WT Presence and launch War Thunder. The Discord connection is automatic.
 3. If you want WT Presence to be the only visible activity card, disable War Thunder in Discord under **User Settings → Registered Games**. This is a one-time setting you change in Discord.
 
-The dashboard's **Presence** editor lets you choose **Automatic**, **Default**, **Air**, **Ground**, **Naval**, or **Hangar** artwork. Automatic follows the current game phase and vehicle type. Preview Lab works without the game or Discord, so templates can be edited and tested offline.
+Open **Discord status** to edit the two lines, choose an image, and enable the timer. **Add live value** inserts a readable placeholder such as `[Vehicle name]`. The preview uses sample data unless **Live** is selected. Click **Save changes** to apply your edits.
+
+The language selector changes the settings page, not your custom Discord text. Connection settings are under **Advanced settings** and require restarting WT Presence. Open settings from the tray after changing the port.
+
+The page previews text, not Discord's exact card layout. Image assets are resolved by Discord.
+
+## Troubleshooting
+
+Open **Diagnostics** to check game data, the last successful Discord write, and the application version. **Copy diagnostic report** omits tokens, account details, templates, paths, and raw errors. Detailed errors stay on the local page.
+
+On Windows, logs are in `%LOCALAPPDATA%\WT Presence\WT Presence\data\logs`. Old logs are pruned at startup and daily rotation retains at most seven files. Inspect log contents before sharing them.
+
+Kills and deaths are not collected yet. Session history shows detected sessions and completed battles; it is not a substitute for career statistics.
 
 ## Templates
 
-The bundled editor supports strict MiniJinja templates. Available values include:
+Advanced users can keep existing MiniJinja templates. The friendly editor converts its named values to templates internally. Available values include:
 
 ```text
 vehicle.name          game.phase_label
 vehicle.kind          game.mode
 telemetry.ias         game.map
-telemetry.agl         session.kills
+telemetry.agl         telemetry.ground_speed
 telemetry.crew_current
 ```
 
@@ -89,14 +103,17 @@ The dashboard opens automatically. War Thunder must be running for live telemetr
 ```sh
 cd web
 npm ci
+npm test
 npm run build
+npx playwright install chromium
+npm run test:e2e
 cd ..
 cargo fmt --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-features
 ```
 
-CI runs the same frontend build, formatting, lint, and test checks on Ubuntu and Windows.
+CI runs the frontend build, formatting, lint, and unit tests on Ubuntu and Windows, plus browser checks on Ubuntu.
 
 ## License
 

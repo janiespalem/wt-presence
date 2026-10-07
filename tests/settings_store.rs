@@ -180,3 +180,17 @@ fn rejects_remote_telemetry_sources() {
     assert!(matches!(error, SettingsError::Invalid(_)));
     assert!(error.to_string().contains("loopback"));
 }
+
+#[test]
+fn minimized_start_never_opens_the_dashboard() {
+    for open in [false, true] {
+        for minimized in [false, true] {
+            let settings = wt_presence::config::AppSettings {
+                open_dashboard_on_start: open,
+                start_minimized: minimized,
+                ..Default::default()
+            };
+            assert_eq!(settings.should_open_dashboard(), open && !minimized);
+        }
+    }
+}

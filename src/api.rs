@@ -15,6 +15,7 @@ use tokio::sync::RwLock;
 
 use crate::{
     config::{AppSettings, SettingsError, SettingsStore},
+    diagnostics::DiagnosticReport,
     domain::GameSnapshot,
     presence::{DiscordActivity, PresenceError},
     preview::{PreviewRequest, render_preview},
@@ -27,18 +28,25 @@ pub struct RuntimeStatus {
     pub version: String,
     pub telemetry_connected: bool,
     pub discord_connected: bool,
+    pub started_at: DateTime<Utc>,
+    pub last_telemetry_at: Option<DateTime<Utc>>,
+    pub last_discord_at: Option<DateTime<Utc>>,
     pub last_error: Option<String>,
     pub updated_at: DateTime<Utc>,
 }
 
 impl Default for RuntimeStatus {
     fn default() -> Self {
+        let now = Utc::now();
         Self {
             version: env!("CARGO_PKG_VERSION").to_owned(),
             telemetry_connected: false,
             discord_connected: false,
+            started_at: now,
+            last_telemetry_at: None,
+            last_discord_at: None,
             last_error: None,
-            updated_at: Utc::now(),
+            updated_at: now,
         }
     }
 }
@@ -86,7 +94,19 @@ impl ApiState {
 
     pub async fn set_status(&self, mut status: RuntimeStatus) {
         status.updated_at = Utc::now();
-        *self.inner.status.write().await = status;
+        let mut current = self.inner.status.write().await;
+        if current.telemetry_connected != status.telemetry_connected
+            || current.discord_connected != status.discord_connected
+            || current.last_error.is_some() != status.last_error.is_some()
+        {
+            tracing::info!(
+                telemetry_connected = status.telemetry_connected,
+                discord_connected = status.discord_connected,
+                has_error = status.last_error.is_some(),
+                "connection state changed"
+            );
+        }
+        *current = status;
     }
 
     pub async fn set_game_state(&self, snapshot: GameSnapshot, session: SessionSummary) {
@@ -122,6 +142,7 @@ impl ApiState {
 pub fn router(state: ApiState) -> Router {
     Router::new()
         .route("/api/v1/status", get(get_status))
+        .route("/api/v1/diagnostics", get(get_diagnostics))
         .route("/api/v1/snapshot", get(get_snapshot))
         .route("/api/v1/settings", get(get_settings).put(put_settings))
         .route("/api/v1/preview", post(post_preview))
@@ -170,6 +191,12 @@ async fn get_status(State(state): State<ApiState>) -> Json<RuntimeStatus> {
     Json(state.inner.status.read().await.clone())
 }
 
+async fn get_diagnostics(State(state): State<ApiState>) -> Json<DiagnosticReport> {
+    let status = state.inner.status.read().await;
+    let snapshot = state.inner.snapshot.read().await;
+    Json(DiagnosticReport::capture(&status, &snapshot))
+}
+
 async fn get_snapshot(State(state): State<ApiState>) -> Json<GameSnapshot> {
     Json(state.inner.snapshot.read().await.clone())
 }
@@ -183,12 +210,13 @@ async fn put_settings(
     Json(settings): Json<AppSettings>,
 ) -> Result<Json<AppSettings>, ApiError> {
     settings.validate().map_err(ApiError::settings)?;
+    let mut current = state.inner.settings.write().await;
     state
         .inner
         .settings_store
         .save(&settings)
         .map_err(ApiError::settings)?;
-    *state.inner.settings.write().await = settings.clone();
+    *current = settings.clone();
     Ok(Json(settings))
 }
 
